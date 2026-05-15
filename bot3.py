@@ -15,9 +15,9 @@ import os
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 # ========== 配置 ==========
-TOKEN = "8885640450:AAEZXXi0tXqxVv9tfOUW6Z7VUtTQDUVuO5g"
+TOKEN = "8885640450:AAFP81GT-qdEH3iJ4GHzYXezWE4OvIgFv7I"
 MASTER_USER_ID = 8782394486
-WEB_URL = "https://mybot-7tyh.onrender.com"  # 你的网页地址
+WEB_URL = "https://mybot-7tyh.onrender.com"
 PORT = int(os.environ.get('PORT', 8080))
 
 TIMEZONES = {
@@ -26,7 +26,6 @@ TIMEZONES = {
     'thailand': 'Asia/Bangkok',
 }
 
-# Flask Web 应用
 flask_app = Flask(__name__)
 
 # ========== 数据库函数 ==========
@@ -252,7 +251,7 @@ async def export_csv(update: Update, context: ContextTypes.DEFAULT_TYPE, gid=Non
             caption=f"📊 账单导出\n总入款: {total_rmb:.0f} 元 = {total_usdt:.2f} U"
         )
 
-# ========== Web API ==========
+# ========== Web ==========
 
 @flask_app.route('/')
 def index():
@@ -300,22 +299,35 @@ def index():
         </div>
         <script>
             let currentDate = new Date().toISOString().split('T')[0];
+            let GROUP_ID = null;
+            
             function getDateFromURL() {
                 const urlParams = new URLSearchParams(window.location.search);
                 const date = urlParams.get('date');
                 if (date) { currentDate = date; document.getElementById('datePicker').value = date; }
                 else { document.getElementById('datePicker').value = currentDate; }
+                
+                GROUP_ID = urlParams.get('group_id');
+                if (!GROUP_ID) {
+                    document.getElementById('content').innerHTML = '<div class="loading">❌ 请通过机器人的"查看完整账单"按钮访问</div>';
+                    return false;
+                }
+                return true;
             }
+            
             async function loadData() {
+                if (!GROUP_ID) { return; }
                 const datePicker = document.getElementById('datePicker');
                 currentDate = datePicker.value;
                 document.getElementById('dateInfo').innerHTML = `📅 ${currentDate} | 时差对照：UTC+8 北京时间`;
                 document.getElementById('content').innerHTML = '<div class="loading">加载中...</div>';
                 try {
-                    const GROUP_ID = -1003974937469;
                     const response = await fetch(`/api/bill?date=${currentDate}&group_id=${GROUP_ID}`);
                     const data = await response.json();
-                    if (data.error) { document.getElementById('content').innerHTML = '<div class="loading">暂无数据</div>'; return; }
+                    if (data.error || !data.income_bills) {
+                        document.getElementById('content').innerHTML = '<div class="loading">暂无账单数据</div>';
+                        return;
+                    }
                     let html = '';
                     if (data.income_bills && data.income_bills.length > 0) {
                         html += `<div class="section"><div class="section-title">📥 入款记录 (${data.income_bills.length} 笔)</div><table><thead><tr><th>备注</th><th>时间</th><th>金额(元)</th><th>汇率</th><th>USDT</th><th>操作人</th></tr></thead><tbody>`;
@@ -323,6 +335,8 @@ def index():
                             html += `<tr><td>${bill.remark || '-'}</td><td>${bill.time}</td><td>${bill.amount}</td><td>${bill.exchange_rate}</td><td>${bill.usdt}</td><td>${bill.username}</td></tr>`;
                         }
                         html += `</tbody></table></div>`;
+                    } else {
+                        html += `<div class="section"><div class="section-title">📥 入款记录</div><div class="loading">暂无入款记录</div></div>`;
                     }
                     html += `<div class="stats-box"><div class="stats-grid">
                         <div class="stat-card"><div class="stat-label">💰 费率</div><div class="stat-value">${data.fee_rate}<span class="stat-unit">%</span></div></div>
@@ -333,11 +347,13 @@ def index():
                         <div class="stat-card"><div class="stat-label">📊 未下发</div><div class="stat-value">${data.remaining_usdt}<span class="stat-unit">U</span></div></div>
                     </div></div>`;
                     document.getElementById('content').innerHTML = html;
-                } catch (err) { document.getElementById('content').innerHTML = '<div class="loading">加载失败</div>'; }
+                } catch (err) {
+                    document.getElementById('content').innerHTML = '<div class="loading">加载失败，请稍后重试</div>';
+                }
             }
             function prevDay() { const d = new Date(currentDate); d.setDate(d.getDate() - 1); currentDate = d.toISOString().split('T')[0]; document.getElementById('datePicker').value = currentDate; loadData(); }
             function nextDay() { const d = new Date(currentDate); d.setDate(d.getDate() + 1); currentDate = d.toISOString().split('T')[0]; document.getElementById('datePicker').value = currentDate; loadData(); }
-            getDateFromURL(); loadData();
+            if (getDateFromURL()) { loadData(); }
         </script>
     </body>
     </html>
@@ -386,7 +402,6 @@ def api_bill():
 # ========== 机器人命令 ==========
 
 async def show_full_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """发送网页链接"""
     query = update.callback_query
     await query.answer()
     gid = update.effective_chat.id
@@ -411,9 +426,8 @@ async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message += "`/bill` - 查看今日账单\n`/language` - 切换语言\n`/timezone` - 设置时区\n"
     message += "`/deltoday` - 删除今日账单\n`/dellast` - 删除最后一笔\n`/delall` - 删除所有账单"
     
-    # 使用 URL 按钮直接打开网页
     keyboard = [[
-        InlineKeyboardButton("📊 查看完整账单", url=WEB_URL),
+        InlineKeyboardButton("📊 查看完整账单", url=f"{WEB_URL}?group_id={gid}"),
         InlineKeyboardButton("📖 帮助", callback_data='show_help')
     ]]
     await query.edit_message_text(message, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
@@ -457,7 +471,6 @@ async def show_full_bill(update: Update, gid):
     
     message = f"📊 今日账单汇总 {today_date}\n━━━━━━━━━━━━━━━━━━━━\n\n"
     
-    # 显示入款记录
     if income:
         message += f"📥 入款({len(income)} 笔):\n"
         for bill in income[:5]:
@@ -479,7 +492,6 @@ async def show_full_bill(update: Update, gid):
     else:
         message += "📥 入款(0 笔):\n\n"
     
-    # 显示下发记录
     if expense:
         message += f"📤 下发({len(expense)} 笔):\n"
         for bill in expense[:5]:
@@ -506,7 +518,7 @@ async def show_full_bill(update: Update, gid):
         message += f"📊 未下发：{(total_usdt - expense_usdt) * rate:.0f} 元"
     
     keyboard = [[
-        InlineKeyboardButton("📊 查看完整账单", url=WEB_URL),
+        InlineKeyboardButton("📊 查看完整账单", url=f"{WEB_URL}?group_id={gid}"),
         InlineKeyboardButton("📖 帮助", callback_data='show_help')
     ]]
     await update.message.reply_text(message, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
@@ -515,10 +527,13 @@ async def show_today_summary(update: Update, gid):
     income, expense, total_income, total_expense, today_date = get_today_bills(gid)
     rate = get_setting(gid, 'exchange_rate') or 7.2
     show_usdt = get_setting(gid, 'show_usdt') or 1
+    
     total_rmb = total_income[0] or 0
     total_usdt = total_income[1] or 0
     expense_usdt = total_expense[0] or 0
+    
     message = f"📊 今日账单汇总\n📅 {today_date}\n━━━━━━━━━━━━━━━━━━━━\n\n"
+    
     if income:
         message += f"📥 入款({len(income)} 笔):\n"
         for bill in income[:5]:
@@ -534,16 +549,39 @@ async def show_today_summary(update: Update, gid):
                     message += f"  {username} {time_short}  +{amount:.0f}元 = {usdt:.2f}U\n"
                 else:
                     message += f"  {username} {time_short}  +{amount:.0f}元\n"
+        if len(income) > 5:
+            message += f"  ... 还有 {len(income)-5} 笔\n"
         message += "\n"
+    else:
+        message += "📥 入款(0 笔):\n\n"
+    
+    if expense:
+        message += f"📤 下发({len(expense)} 笔):\n"
+        for bill in expense[:5]:
+            remark, username, usdt, ex_rate, ts = bill
+            time_short = ts[11:16] if len(ts) > 11 else ts
+            if show_usdt:
+                message += f"  {username} {time_short}  下发 {usdt:.2f}U\n"
+            else:
+                message += f"  {username} {time_short}  下发 {usdt * ex_rate:.0f}元\n"
+        if len(expense) > 5:
+            message += f"  ... 还有 {len(expense)-5} 笔\n"
+        message += "\n"
+    else:
+        message += "📤 下发(0 笔):\n\n"
+    
     message += f"💰 汇率：{rate:.2f}\n"
     if show_usdt:
-        message += f"📊 总入款：{total_rmb:.0f} 元 = {total_usdt:.2f} U\n📊 已下发：{expense_usdt:.2f} U\n📊 未下发：{total_usdt - expense_usdt:.2f} U"
+        message += f"📊 总入款：{total_rmb:.0f} 元 = {total_usdt:.2f} U\n"
+        message += f"📊 已下发：{expense_usdt:.2f} U\n"
+        message += f"📊 未下发：{total_usdt - expense_usdt:.2f} U"
     else:
-        message += f"📊 总入款：{total_rmb:.0f} 元\n📊 已下发：{expense_usdt * rate:.0f} 元\n📊 未下发：{(total_usdt - expense_usdt) * rate:.0f} 元"
+        message += f"📊 总入款：{total_rmb:.0f} 元\n"
+        message += f"📊 已下发：{expense_usdt * rate:.0f} 元\n"
+        message += f"📊 未下发：{(total_usdt - expense_usdt) * rate:.0f} 元"
     
-    # 使用 URL 按钮直接打开网页
     keyboard = [[
-        InlineKeyboardButton("📊 查看完整账单", url=WEB_URL),
+        InlineKeyboardButton("📊 查看完整账单", url=f"{WEB_URL}?group_id={gid}"),
         InlineKeyboardButton("📖 帮助", callback_data='show_help')
     ]]
     await update.message.reply_text(message, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
@@ -584,7 +622,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(help_text, parse_mode='Markdown')
 
 async def bill_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """发送账单网页链接"""
     gid = update.effective_chat.id
     today = datetime.now().strftime("%Y-%m-%d")
     web_url = f"{WEB_URL}?date={today}&group_id={gid}"
