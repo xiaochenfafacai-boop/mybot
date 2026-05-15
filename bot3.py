@@ -15,7 +15,7 @@ import os
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 # ========== 配置 ==========
-TOKEN = "8885640450:AAF6BsHc4P-6GZl-HGTc3c8zD0mRiG1K8Fs"
+TOKEN = "8885640450:AAGNho8CU63JdS9JDSAvHSvsVErj_3scZiA"
 MASTER_USER_ID = 8782394486
 WEB_URL = "https://mybot-7tyh.onrender.com"
 PORT = int(os.environ.get('PORT', 8080))
@@ -199,7 +199,6 @@ def delete_user_bills(group_id, name):
 # ========== 分类统计函数 ==========
 
 def get_remark_stats(group_id, date_str):
-    """按备注分类统计入款"""
     conn = sqlite3.connect('bot_data.db')
     c = conn.cursor()
     c.execute("SELECT remark, COUNT(*), SUM(amount), SUM(usdt_amount) FROM bills WHERE group_id = ? AND bill_type = 'income' AND date(timestamp) = ? GROUP BY remark ORDER BY SUM(usdt_amount) DESC", 
@@ -209,7 +208,6 @@ def get_remark_stats(group_id, date_str):
     return stats
 
 def get_operator_stats(group_id, date_str):
-    """按操作人分类统计"""
     conn = sqlite3.connect('bot_data.db')
     c = conn.cursor()
     c.execute("SELECT username, COUNT(*), SUM(amount), SUM(usdt_amount) FROM bills WHERE group_id = ? AND bill_type = 'income' AND date(timestamp) = ? GROUP BY username ORDER BY SUM(usdt_amount) DESC", 
@@ -313,7 +311,6 @@ def index():
             .sub-section { margin-top: 20px; margin-bottom: 20px; }
             .sub-title { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #555; }
             .footer { background: #f8f9fc; padding: 16px 30px; text-align: center; font-size: 12px; color: #888; }
-            @media (max-width: 768px) { .content { padding: 16px; } th, td { padding: 8px 4px; font-size: 11px; } }
         </style>
     </head>
     <body>
@@ -335,7 +332,6 @@ def index():
                 const date = urlParams.get('date');
                 if (date) { currentDate = date; document.getElementById('datePicker').value = date; }
                 else { document.getElementById('datePicker').value = currentDate; }
-                
                 GROUP_ID = urlParams.get('group_id');
                 if (!GROUP_ID) {
                     document.getElementById('content').innerHTML = '<div class="loading">❌ 请通过机器人的"查看完整账单"按钮访问</div>';
@@ -359,7 +355,6 @@ def index():
                     }
                     let html = '';
                     
-                    // 入款记录表格
                     if (data.income_bills && data.income_bills.length > 0) {
                         html += `<div class="section"><div class="section-title">📥 入款记录 (${data.income_bills.length} 笔)</div>
                             <table><thead><tr><th>备注</th><th>时间</th><th>金额(元)</th><th>汇率</th><th>USDT</th><th>操作人</th></tr></thead><tbody>`;
@@ -378,7 +373,6 @@ def index():
                         html += `<div class="section"><div class="section-title">📥 入款记录</div><div class="loading">暂无入款记录</div></div>`;
                     }
                     
-                    // 下发记录表格
                     if (data.expense_bills && data.expense_bills.length > 0) {
                         html += `<div class="section"><div class="section-title">📤 下发记录 (${data.expense_bills.length} 笔)</div>
                             <table><thead><tr><th>备注</th><th>时间</th><th>USDT</th><th>操作人</th></tr></thead><tbody>`;
@@ -395,16 +389,14 @@ def index():
                         html += `<div class="section"><div class="section-title">📤 下发记录</div><div class="loading">暂无下发记录</div></div>`;
                     }
                     
-                    // 备注分类统计
                     if (data.remark_stats && data.remark_stats.length > 0) {
                         html += `<div class="section"><div class="section-title">📊 备注分类统计</div>`;
                         for (const stat of data.remark_stats) {
-                            html += `<div class="stat-item"><span class="stat-name">📝 ${stat.remark || '无备注'}</span><span class="stat-number">${stat.count}笔 | ${stat.amount}元 | ${stat.usdt}U</span></div>`;
+                            html += `<div class="stat-item"><span class="stat-name">📝 ${stat.remark}</span><span class="stat-number">${stat.count}笔 | ${stat.amount}元 | ${stat.usdt}U</span></div>`;
                         }
                         html += `</div>`;
                     }
                     
-                    // 操作人分类统计
                     if (data.operator_stats && data.operator_stats.length > 0) {
                         html += `<div class="section"><div class="section-title">👤 操作人统计</div>`;
                         for (const stat of data.operator_stats) {
@@ -413,7 +405,6 @@ def index():
                         html += `</div>`;
                     }
                     
-                    // 汇总统计
                     html += `<div class="stats-box"><div class="stats-grid">
                         <div class="stat-card"><div class="stat-label">💰 费率</div><div class="stat-value">${data.fee_rate}<span class="stat-unit">%</span></div></div>
                         <div class="stat-card"><div class="stat-label">💱 汇率</div><div class="stat-value">${data.exchange_rate}</div></div>
@@ -475,7 +466,6 @@ def api_bill():
                 'time': time_str
             })
     
-    # 按备注分类统计
     remark_stats = []
     conn = sqlite3.connect('bot_data.db')
     c = conn.cursor()
@@ -483,13 +473,12 @@ def api_bill():
               (group_id, date_str))
     for row in c.fetchall():
         remark_stats.append({
-            'remark': row[0] or '无备注',
+            'remark': row[0] if row[0] else '无备注',
             'count': row[1],
             'amount': f"{row[2]:.0f}",
             'usdt': f"{row[3]:.2f}"
         })
     
-    # 按操作人分类统计
     operator_stats = []
     c.execute("SELECT username, COUNT(*), SUM(amount), SUM(usdt_amount) FROM bills WHERE group_id = ? AND bill_type = 'income' AND date(timestamp) = ? GROUP BY username ORDER BY SUM(usdt_amount) DESC", 
               (group_id, date_str))
@@ -517,64 +506,288 @@ def api_bill():
 
 # ========== 机器人命令 ==========
 
-async def show_full_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    gid = update.effective_chat.id
-    today = datetime.now().strftime("%Y-%m-%d")
-    web_url = f"{WEB_URL}?date={today}&group_id={gid}"
-    await query.edit_message_text(
-        f"📊 *完整账单*\n\n点击链接查看完整账单（可在网页中切换日期）：\n{web_url}\n\n💡 提示：在网页里可以选择任意日期查看账单",
-        parse_mode='Markdown', disable_web_page_preview=False
-    )
-
-async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     gid = update.effective_chat.id
     rate = get_setting(gid, 'exchange_rate') or 7.2
     is_active = get_setting(gid, 'is_active') or 0
     status = "🟢 开启" if is_active else "🔴 关闭"
-    message = f"🤖 *记账机器人*\n\n📌 状态: {status}\n💰 汇率: 1 USDT = {rate:.2f} 元\n"
-    message += "━━━━━━━━━━━━━━━━━━━━\n\n📝 *记账格式:*\n`+1000` - 入款1000元\n"
-    message += "`အမည်+2000` - 带备注入款\n`下发50` - 下发50 USDT\n`+0` - 查看今日汇总\n\n"
-    message += "📌 *管理命令:*\n`/mode` - 开关记账模式\n`/setrate` - 设置汇率\n`/setoperator` - 设置操作人\n"
-    message += "`/bill` - 查看今日账单\n`/language` - 切换语言\n`/timezone` - 设置时区\n"
-    message += "`/deltoday` - 删除今日账单\n`/dellast` - 删除最后一笔\n`/delall` - 删除所有账单"
-    
-    keyboard = [[
-        InlineKeyboardButton("📊 查看完整账单", url=f"{WEB_URL}?group_id={gid}"),
-        InlineKeyboardButton("📖 帮助", callback_data='show_help')
-    ]]
-    await query.edit_message_text(message, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+    message = f"🤖 *记账机器人已启动*\n\n📌 状态: {status}\n💰 汇率: 1 USDT = {rate:.2f} 元\n\n发送 /help 查看帮助"
+    await update.message.reply_text(message, parse_mode='Markdown')
 
-async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = """
-📖 *记账机器人帮助*
+🤖 *记账机器人帮助*
 
 📌 *记账格式：*
 `+1000` - 入款1000元
 `အမည်+2000` - 带备注入款
 `下发50` - 下发50 USDT
 `+0` - 查看今日汇总
+`/bill` - 获取网页账单链接
 
 📌 *管理命令：*
 `/mode` - 开启/关闭记账模式
 `/setrate 7.2` - 设置汇率
-`/setoperator` - 设置操作人
-`/bill` - 查看今日账单
-`/language` - 切换语言
+`/setoperator` - 设置操作人（回复某人消息后发送）
+`/listops` - 查看操作人列表
+`/language` - 切换语言（中文/缅甸语）
 `/timezone` - 设置时区
 
 📌 *删除命令：*
 `/deltoday` - 删除今日所有账单
 `/dellast` - 删除最后一笔账单
 `/delall` - 删除所有账单
+`/deluser 名字` - 删除某人的账单
+
+📌 *历史查询：*
+`/history 2026-05-13` - 查询指定日期账单
 """
-    keyboard = [[InlineKeyboardButton("🔙 返回", callback_data='back_to_main')]]
-    await query.edit_message_text(help_text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.message.reply_text(help_text, parse_mode='Markdown')
+
+async def mode_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    gid = update.effective_chat.id
+    uid = update.effective_user.id
+    if not can_use(gid, uid):
+        await update.message.reply_text("❌ 你没有操作权限")
+        return
+    current = get_setting(gid, 'is_active') or 0
+    if current == 0:
+        update_setting(gid, 'is_active', 1)
+        await update.message.reply_text("✅ 记账模式已开启\n\n现在可以发送记账命令了！")
+    else:
+        update_setting(gid, 'is_active', 0)
+        await update.message.reply_text("🔕 记账模式已关闭")
+
+async def setrate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    gid = update.effective_chat.id
+    uid = update.effective_user.id
+    if not can_use(gid, uid):
+        await update.message.reply_text("❌ 你没有操作权限")
+        return
+    if not context.args:
+        await update.message.reply_text("📌 用法: /setrate 7.2")
+        return
+    try:
+        rate = float(context.args[0])
+        update_setting(gid, 'exchange_rate', rate)
+        await update.message.reply_text(f"✅ 汇率已设为 {rate}")
+    except:
+        await update.message.reply_text("❌ 请输入正确的数字")
+
+async def bill_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    gid = update.effective_chat.id
+    today = datetime.now().strftime("%Y-%m-%d")
+    web_url = f"{WEB_URL}?date={today}&group_id={gid}"
+    await update.message.reply_text(
+        f"📊 *查看完整账单*\n\n点击链接在网页中查看（可切换日期）：\n{web_url}\n\n"
+        f"💡 提示：在网页里可以选择任意日期查看账单，还有分类统计",
+        parse_mode='Markdown',
+        disable_web_page_preview=False
+    )
+
+async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    gid = update.effective_chat.id
+    rate = get_setting(gid, 'exchange_rate') or 7.2
+    is_active = get_setting(gid, 'is_active') or 0
+    lang = get_setting(gid, 'language') or 'chinese'
+    tz_str = get_setting(gid, 'timezone') or 'Asia/Shanghai'
+    show_usdt = get_setting(gid, 'show_usdt') or 1
+    ops = json.loads(get_setting(gid, 'operators') or '[]')
+    
+    status = "开启" if is_active else "关闭"
+    timezone_name = "中国" if tz_str == 'Asia/Shanghai' else "缅甸" if tz_str == 'Asia/Yangon' else "泰国"
+    language_name = "中文" if lang == 'chinese' else "缅甸语"
+    usdt_status = "显示" if show_usdt else "隐藏"
+    
+    message = f"⚙️ *当前设置*\n"
+    message += f"💰 汇率: {rate}\n"
+    message += f"🔘 模式: {status}\n"
+    message += f"🌍 时区: {timezone_name}\n"
+    message += f"📖 语言: {language_name}\n"
+    message += f"💵 USDT显示: {usdt_status}\n"
+    message += f"👤 操作人: {len(ops)}人"
+    await update.message.reply_text(message, parse_mode='Markdown')
+
+async def setoperator_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    gid = update.effective_chat.id
+    if not is_master(uid):
+        await update.message.reply_text("❌ 只有机器人主人可以设置操作人")
+        return
+    if not update.message.reply_to_message:
+        await update.message.reply_text("❌ 请回复要设置为操作人的消息")
+        return
+    target = update.message.reply_to_message.from_user
+    ops = json.loads(get_setting(gid, 'operators') or '[]')
+    if target.id not in ops:
+        ops.append(target.id)
+        update_setting(gid, 'operators', json.dumps(ops))
+        await update.message.reply_text(f"✅ 已设置 {target.first_name} 为操作人")
+    else:
+        await update.message.reply_text("该用户已经是操作人")
+
+async def listops_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    gid = update.effective_chat.id
+    ops = json.loads(get_setting(gid, 'operators') or '[]')
+    if not ops:
+        await update.message.reply_text("📋 暂无操作人")
+        return
+    message = "📋 操作人列表:\n"
+    for oid in ops:
+        try:
+            member = await context.bot.get_chat_member(gid, oid)
+            message += f"  • {member.user.first_name}\n"
+        except:
+            message += f"  • ID: {oid}\n"
+    await update.message.reply_text(message)
+
+async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    gid = update.effective_chat.id
+    uid = update.effective_user.id
+    if not can_use(gid, uid):
+        await update.message.reply_text("❌ 你没有操作权限")
+        return
+    current = get_setting(gid, 'language') or 'chinese'
+    if current == 'chinese':
+        new_lang = 'myanmar'
+        await update.message.reply_text("✅ 已切换为缅甸语\n✅ မြန်မာဘာသာသို့ ပြောင်းပြီး")
+    else:
+        new_lang = 'chinese'
+        await update.message.reply_text("✅ 已切换为中文")
+    update_setting(gid, 'language', new_lang)
+
+async def timezone_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    gid = update.effective_chat.id
+    uid = update.effective_user.id
+    if not can_use(gid, uid):
+        await update.message.reply_text("❌ 你没有操作权限")
+        return
+    if not context.args:
+        tz_list = "📌 可用时区:\n  /timezone china - 中国北京时间\n  /timezone myanmar - 缅甸\n  /timezone thailand - 泰国"
+        await update.message.reply_text(tz_list)
+        return
+    tz_name = context.args[0].lower()
+    if tz_name in TIMEZONES:
+        update_setting(gid, 'timezone', TIMEZONES[tz_name])
+        await update.message.reply_text(f"✅ 时区已切换")
+    else:
+        await update.message.reply_text("❌ 无效的时区\n可用: china, myanmar, thailand")
+
+async def show_usdt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    gid = update.effective_chat.id
+    uid = update.effective_user.id
+    if not can_use(gid, uid):
+        await update.message.reply_text("❌ 你没有操作权限")
+        return
+    update_setting(gid, 'show_usdt', 1)
+    await update.message.reply_text("✅ 已开启USDT显示模式\n\n账单将同时显示人民币和USDT金额")
+
+async def hide_usdt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    gid = update.effective_chat.id
+    uid = update.effective_user.id
+    if not can_use(gid, uid):
+        await update.message.reply_text("❌ 你没有操作权限")
+        return
+    update_setting(gid, 'show_usdt', 0)
+    await update.message.reply_text("🔕 已关闭USDT显示模式\n\n账单将只显示人民币金额")
+
+async def del_today_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    gid = update.effective_chat.id
+    uid = update.effective_user.id
+    if not can_use(gid, uid):
+        await update.message.reply_text("❌ 你没有操作权限")
+        return
+    deleted = delete_today_bills(gid)
+    if deleted > 0:
+        await update.message.reply_text(f"✅ 已删除今日所有账单，共 {deleted} 条记录")
+    else:
+        await update.message.reply_text("📭 今日暂无账单可删除")
+
+async def del_last_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    gid = update.effective_chat.id
+    uid = update.effective_user.id
+    if not can_use(gid, uid):
+        await update.message.reply_text("❌ 你没有操作权限")
+        return
+    deleted = delete_last_bill(gid)
+    if deleted > 0:
+        await update.message.reply_text("✅ 已删除最后一笔账单")
+    else:
+        await update.message.reply_text("📭 暂无账单可删除")
+
+async def del_all_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    gid = update.effective_chat.id
+    uid = update.effective_user.id
+    if not can_use(gid, uid):
+        await update.message.reply_text("❌ 你没有操作权限")
+        return
+    deleted = delete_all_bills(gid)
+    if deleted > 0:
+        await update.message.reply_text(f"✅ 已删除所有账单，共 {deleted} 条记录")
+    else:
+        await update.message.reply_text("📭 暂无账单可删除")
+
+async def del_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    gid = update.effective_chat.id
+    uid = update.effective_user.id
+    if not can_use(gid, uid):
+        await update.message.reply_text("❌ 你没有操作权限")
+        return
+    if not context.args:
+        await update.message.reply_text("📌 用法: /deluser 名字")
+        return
+    target_name = ' '.join(context.args)
+    deleted = delete_user_bills(gid, target_name)
+    await update.message.reply_text(f"✅ 已删除 {target_name} 的账单，共 {deleted} 条记录")
+
+async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    gid = update.effective_chat.id
+    uid = update.effective_user.id
+    if not can_use(gid, uid):
+        await update.message.reply_text("❌ 你没有操作权限")
+        return
+    if not context.args:
+        await update.message.reply_text("📅 用法: /history 2026-05-13\n\n例如: /history 2026-05-13")
+        return
+    date_str = context.args[0]
+    try:
+        datetime.strptime(date_str, "%Y-%m-%d")
+    except:
+        await update.message.reply_text("❌ 日期格式错误！\n正确格式: 2026-05-13")
+        return
+    bills, total_income, total_expense = get_bills_by_date(gid, date_str)
+    rate = get_setting(gid, 'exchange_rate') or 7.2
+    show_usdt = get_setting(gid, 'show_usdt') or 1
+    total_rmb = total_income[0] or 0
+    total_usdt = total_income[1] or 0
+    expense_usdt = total_expense[0] or 0
+    if not bills:
+        await update.message.reply_text(f"📭 {date_str} 没有账单记录")
+        return
+    message = f"📊 *历史账单*\n📅 {date_str}\n━━━━━━━━━━━━━━━━━━━━\n\n"
+    income_bills = [b for b in bills if b[5] == 'income']
+    if income_bills:
+        message += f"📥 入款({len(income_bills)} 笔):\n"
+        for bill in income_bills[:10]:
+            remark, username, amount, usdt, ex_rate, _, ts = bill
+            time_short = ts[11:16] if len(ts) > 11 else ts
+            if remark:
+                if show_usdt:
+                    message += f"  {username}【{remark}】{time_short}  {amount:.0f} / {ex_rate:.0f} = {usdt:.2f} U\n"
+                else:
+                    message += f"  {username}【{remark}】{time_short}  {amount:.0f} 元\n"
+            else:
+                if show_usdt:
+                    message += f"  {username} {time_short}  {amount:.0f} / {ex_rate:.0f} = {usdt:.2f} U\n"
+                else:
+                    message += f"  {username} {time_short}  {amount:.0f} 元\n"
+        message += "\n"
+    message += f"💰 汇率：{rate:.2f}\n"
+    if show_usdt:
+        message += f"📊 总入款：{total_rmb:.0f} | {total_usdt:.2f} U\n📊 已下发：{expense_usdt:.2f} U\n📊 未下发：{total_usdt - expense_usdt:.2f} U"
+    else:
+        message += f"📊 总入款：{total_rmb:.0f} 元\n📊 已下发：{expense_usdt * rate:.0f} 元\n📊 未下发：{(total_usdt - expense_usdt) * rate:.0f} 元"
+    await update.message.reply_text(message, parse_mode='Markdown')
 
 async def show_full_bill(update: Update, gid):
     income, expense, total_income, total_expense, today_date = get_today_bills(gid)
@@ -702,258 +915,30 @@ async def show_today_summary(update: Update, gid):
     ]]
     await update.message.reply_text(message, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
 
-# ========== 命令处理 ==========
+async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    await help_command(update, context)
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
     gid = update.effective_chat.id
     rate = get_setting(gid, 'exchange_rate') or 7.2
     is_active = get_setting(gid, 'is_active') or 0
     status = "🟢 开启" if is_active else "🔴 关闭"
-    message = f"🤖 *记账机器人已启动*\n\n📌 状态: {status}\n💰 汇率: 1 USDT = {rate:.2f} 元\n\n发送 /help 查看帮助"
-    await update.message.reply_text(message, parse_mode='Markdown')
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    help_text = """
-🤖 *记账机器人帮助*
-
-📌 *记账格式：*
-`+1000` - 入款1000元
-`အမည်+2000` - 带备注入款
-`下发50` - 下发50 USDT
-`+0` - 查看今日汇总
-
-📌 *管理命令：*
-`/mode` - 开启/关闭记账模式
-`/setrate 7.2` - 设置汇率
-`/setoperator` - 设置操作人
-`/bill` - 查看今日账单
-`/language` - 切换语言
-`/timezone` - 设置时区
-
-📌 *删除命令：*
-`/deltoday` - 删除今日所有账单
-`/dellast` - 删除最后一笔账单
-`/delall` - 删除所有账单
-"""
-    await update.message.reply_text(help_text, parse_mode='Markdown')
-
-async def bill_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    gid = update.effective_chat.id
-    today = datetime.now().strftime("%Y-%m-%d")
-    web_url = f"{WEB_URL}?date={today}&group_id={gid}"
-    await update.message.reply_text(
-        f"📊 *查看完整账单*\n\n点击链接在网页中查看（可切换日期）：\n{web_url}\n\n"
-        f"💡 提示：在网页里可以选择任意日期查看账单",
-        parse_mode='Markdown',
-        disable_web_page_preview=False
-    )
-
-async def mode_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    gid = update.effective_chat.id
-    uid = update.effective_user.id
-    if not can_use(gid, uid):
-        await update.message.reply_text("❌ 你没有操作权限")
-        return
-    current = get_setting(gid, 'is_active') or 0
-    if current == 0:
-        update_setting(gid, 'is_active', 1)
-        await update.message.reply_text("✅ 记账模式已开启\n\n现在可以发送记账命令了！")
-    else:
-        update_setting(gid, 'is_active', 0)
-        await update.message.reply_text("🔕 记账模式已关闭")
-
-async def setrate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    gid = update.effective_chat.id
-    uid = update.effective_user.id
-    if not can_use(gid, uid):
-        await update.message.reply_text("❌ 你没有操作权限")
-        return
-    if not context.args:
-        await update.message.reply_text("用法: /setrate 7.2")
-        return
-    try:
-        rate = float(context.args[0])
-        update_setting(gid, 'exchange_rate', rate)
-        await update.message.reply_text(f"✅ 汇率已设为 {rate}")
-    except:
-        await update.message.reply_text("❌ 请输入正确的数字")
-
-async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    gid = update.effective_chat.id
-    rate = get_setting(gid, 'exchange_rate') or 7.2
-    is_active = get_setting(gid, 'is_active') or 0
-    ops = json.loads(get_setting(gid, 'operators') or '[]')
-    status = "开启" if is_active else "关闭"
-    message = f"⚙️ *当前设置*\n💰 汇率: {rate}\n🔘 模式: {status}\n👤 操作人: {len(ops)}人"
-    await update.message.reply_text(message, parse_mode='Markdown')
-
-async def setoperator_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    gid = update.effective_chat.id
-    if not is_master(uid):
-        await update.message.reply_text("❌ 只有机器人主人可以设置操作人")
-        return
-    if not update.message.reply_to_message:
-        await update.message.reply_text("❌ 请回复要设置为操作人的消息")
-        return
-    target = update.message.reply_to_message.from_user
-    ops = json.loads(get_setting(gid, 'operators') or '[]')
-    if target.id not in ops:
-        ops.append(target.id)
-        update_setting(gid, 'operators', json.dumps(ops))
-        await update.message.reply_text(f"✅ 已设置 {target.first_name} 为操作人")
-    else:
-        await update.message.reply_text("该用户已经是操作人")
-
-async def listops_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    gid = update.effective_chat.id
-    ops = json.loads(get_setting(gid, 'operators') or '[]')
-    if not ops:
-        await update.message.reply_text("📋 暂无操作人")
-        return
-    message = "📋 操作人列表:\n"
-    for oid in ops:
-        try:
-            member = await context.bot.get_chat_member(gid, oid)
-            message += f"  • {member.user.first_name}\n"
-        except:
-            message += f"  • ID: {oid}\n"
-    await update.message.reply_text(message)
-
-async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    gid = update.effective_chat.id
-    uid = update.effective_user.id
-    if not can_use(gid, uid):
-        await update.message.reply_text("❌ 你没有权限")
-        return
-    current = get_setting(gid, 'language') or 'chinese'
-    new_lang = 'myanmar' if current == 'chinese' else 'chinese'
-    update_setting(gid, 'language', new_lang)
-    await update.message.reply_text("✅ 语言已切换")
-
-async def timezone_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    gid = update.effective_chat.id
-    uid = update.effective_user.id
-    if not can_use(gid, uid):
-        await update.message.reply_text("❌ 你没有操作权限")
-        return
-    if not context.args:
-        tz_list = "可用时区:\n  /timezone china - 中国北京时间\n  /timezone myanmar - 缅甸\n  /timezone thailand - 泰国"
-        await update.message.reply_text(tz_list)
-        return
-    tz_name = context.args[0].lower()
-    if tz_name in TIMEZONES:
-        update_setting(gid, 'timezone', TIMEZONES[tz_name])
-        await update.message.reply_text("✅ 时区已切换")
-    else:
-        await update.message.reply_text("❌ 无效的时区")
-
-async def show_usdt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    gid = update.effective_chat.id
-    uid = update.effective_user.id
-    if not can_use(gid, uid):
-        await update.message.reply_text("❌ 你没有操作权限")
-        return
-    update_setting(gid, 'show_usdt', 1)
-    await update.message.reply_text("✅ 已开启USDT显示模式")
-
-async def hide_usdt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    gid = update.effective_chat.id
-    uid = update.effective_user.id
-    if not can_use(gid, uid):
-        await update.message.reply_text("❌ 你没有操作权限")
-        return
-    update_setting(gid, 'show_usdt', 0)
-    await update.message.reply_text("🔕 已关闭USDT显示模式")
-
-async def del_today_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    gid = update.effective_chat.id
-    uid = update.effective_user.id
-    if not can_use(gid, uid):
-        await update.message.reply_text("❌ 你没有操作权限")
-        return
-    deleted = delete_today_bills(gid)
-    await update.message.reply_text(f"✅ 已删除今日所有账单，共 {deleted} 条记录" if deleted > 0 else "📭 今日暂无账单可删除")
-
-async def del_last_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    gid = update.effective_chat.id
-    uid = update.effective_user.id
-    if not can_use(gid, uid):
-        await update.message.reply_text("❌ 你没有操作权限")
-        return
-    deleted = delete_last_bill(gid)
-    await update.message.reply_text("✅ 已删除最后一笔账单" if deleted > 0 else "📭 暂无账单可删除")
-
-async def del_all_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    gid = update.effective_chat.id
-    uid = update.effective_user.id
-    if not can_use(gid, uid):
-        await update.message.reply_text("❌ 你没有操作权限")
-        return
-    deleted = delete_all_bills(gid)
-    await update.message.reply_text(f"✅ 已删除所有账单，共 {deleted} 条记录" if deleted > 0 else "📭 暂无账单可删除")
-
-async def del_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    gid = update.effective_chat.id
-    uid = update.effective_user.id
-    if not can_use(gid, uid):
-        await update.message.reply_text("❌ 你没有操作权限")
-        return
-    if not context.args:
-        await update.message.reply_text("用法: /deluser 名字")
-        return
-    target_name = ' '.join(context.args)
-    deleted = delete_user_bills(gid, target_name)
-    await update.message.reply_text(f"✅ 已删除 {target_name} 的账单，共 {deleted} 条记录")
-
-async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    gid = update.effective_chat.id
-    uid = update.effective_user.id
-    if not can_use(gid, uid):
-        await update.message.reply_text("❌ 你没有操作权限")
-        return
-    if not context.args:
-        await update.message.reply_text("📅 用法: /history 2026-05-13\n\n例如: /history 2026-05-13")
-        return
-    date_str = context.args[0]
-    try:
-        datetime.strptime(date_str, "%Y-%m-%d")
-    except:
-        await update.message.reply_text("❌ 日期格式错误！\n正确格式: 2026-05-13")
-        return
-    bills, total_income, total_expense = get_bills_by_date(gid, date_str)
-    rate = get_setting(gid, 'exchange_rate') or 7.2
-    show_usdt = get_setting(gid, 'show_usdt') or 1
-    total_rmb = total_income[0] or 0
-    total_usdt = total_income[1] or 0
-    expense_usdt = total_expense[0] or 0
-    if not bills:
-        await update.message.reply_text(f"📭 {date_str} 没有账单记录")
-        return
-    message = f"📊 *历史账单*\n📅 {date_str}\n━━━━━━━━━━━━━━━━━━━━\n\n"
-    income_bills = [b for b in bills if b[5] == 'income']
-    if income_bills:
-        message += f"📥 入款({len(income_bills)} 笔):\n"
-        for bill in income_bills[:10]:
-            remark, username, amount, usdt, ex_rate, _, ts = bill
-            time_short = ts[11:16] if len(ts) > 11 else ts
-            if remark:
-                if show_usdt:
-                    message += f"  {username}【{remark}】{time_short}  {amount:.0f} / {ex_rate:.0f} = {usdt:.2f} U\n"
-                else:
-                    message += f"  {username}【{remark}】{time_short}  {amount:.0f} 元\n"
-            else:
-                if show_usdt:
-                    message += f"  {username} {time_short}  {amount:.0f} / {ex_rate:.0f} = {usdt:.2f} U\n"
-                else:
-                    message += f"  {username} {time_short}  {amount:.0f} 元\n"
-        message += "\n"
-    message += f"💰 汇率：{rate:.2f}\n"
-    if show_usdt:
-        message += f"📊 总入款：{total_rmb:.0f} | {total_usdt:.2f} U\n📊 已下发：{expense_usdt:.2f} U\n📊 未下发：{total_usdt - expense_usdt:.2f} U"
-    else:
-        message += f"📊 总入款：{total_rmb:.0f} 元\n📊 已下发：{expense_usdt * rate:.0f} 元\n📊 未下发：{(total_usdt - expense_usdt) * rate:.0f} 元"
-    await update.message.reply_text(message, parse_mode='Markdown')
+    message = f"🤖 *记账机器人*\n\n📌 状态: {status}\n💰 汇率: 1 USDT = {rate:.2f} 元\n"
+    message += "━━━━━━━━━━━━━━━━━━━━\n\n📝 *记账格式:*\n`+1000` - 入款1000元\n"
+    message += "`အမည်+2000` - 带备注入款\n`下发50` - 下发50 USDT\n`+0` - 查看今日汇总\n\n"
+    message += "📌 *管理命令:*\n`/mode` - 开关记账模式\n`/setrate` - 设置汇率\n`/setoperator` - 设置操作人\n"
+    message += "`/bill` - 查看今日账单\n`/language` - 切换语言\n`/timezone` - 设置时区\n"
+    message += "`/deltoday` - 删除今日账单\n`/dellast` - 删除最后一笔\n`/delall` - 删除所有账单"
+    
+    keyboard = [[
+        InlineKeyboardButton("📊 查看完整账单", url=f"{WEB_URL}?group_id={gid}"),
+        InlineKeyboardButton("📖 帮助", callback_data='show_help')
+    ]]
+    await query.edit_message_text(message, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def accounting(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
