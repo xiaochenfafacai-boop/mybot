@@ -312,7 +312,8 @@ def index():
                 document.getElementById('dateInfo').innerHTML = `📅 ${currentDate} | 时差对照：UTC+8 北京时间`;
                 document.getElementById('content').innerHTML = '<div class="loading">加载中...</div>';
                 try {
-                    const response = await fetch(`/api/bill?date=${currentDate}`);
+                    const GROUP_ID = -1003974937469;
+                    const response = await fetch(`/api/bill?date=${currentDate}&group_id=${GROUP_ID}`);
                     const data = await response.json();
                     if (data.error) { document.getElementById('content').innerHTML = '<div class="loading">暂无数据</div>'; return; }
                     let html = '';
