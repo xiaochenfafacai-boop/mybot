@@ -15,7 +15,7 @@ import os
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 # ========== 配置 ==========
-TOKEN = "8885640450:AAFP81GT-qdEH3iJ4GHzYXezWE4OvIgFv7I"
+TOKEN = "8885640450:AAF6BsHc4P-6GZl-HGTc3c8zD0mRiG1K8Fs"
 MASTER_USER_ID = 8782394486
 WEB_URL = "https://mybot-7tyh.onrender.com"
 PORT = int(os.environ.get('PORT', 8080))
@@ -196,6 +196,28 @@ def delete_user_bills(group_id, name):
     conn.close()
     return deleted
 
+# ========== 分类统计函数 ==========
+
+def get_remark_stats(group_id, date_str):
+    """按备注分类统计入款"""
+    conn = sqlite3.connect('bot_data.db')
+    c = conn.cursor()
+    c.execute("SELECT remark, COUNT(*), SUM(amount), SUM(usdt_amount) FROM bills WHERE group_id = ? AND bill_type = 'income' AND date(timestamp) = ? GROUP BY remark ORDER BY SUM(usdt_amount) DESC", 
+              (group_id, date_str))
+    stats = c.fetchall()
+    conn.close()
+    return stats
+
+def get_operator_stats(group_id, date_str):
+    """按操作人分类统计"""
+    conn = sqlite3.connect('bot_data.db')
+    c = conn.cursor()
+    c.execute("SELECT username, COUNT(*), SUM(amount), SUM(usdt_amount) FROM bills WHERE group_id = ? AND bill_type = 'income' AND date(timestamp) = ? GROUP BY username ORDER BY SUM(usdt_amount) DESC", 
+              (group_id, date_str))
+    stats = c.fetchall()
+    conn.close()
+    return stats
+
 # ========== CSV 导出 ==========
 
 async def export_csv(update: Update, context: ContextTypes.DEFAULT_TYPE, gid=None):
@@ -282,7 +304,14 @@ def index():
             .stat-card { background: white; padding: 16px; border-radius: 12px; text-align: center; }
             .stat-label { font-size: 12px; color: #888; margin-bottom: 8px; }
             .stat-value { font-size: 24px; font-weight: 700; color: #333; }
+            .stat-list { background: white; padding: 16px; border-radius: 12px; margin-bottom: 16px; }
+            .stat-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eef2f6; }
+            .stat-item:last-child { border-bottom: none; }
+            .stat-name { font-weight: 500; color: #333; }
+            .stat-number { color: #667eea; font-weight: 600; }
             .loading { text-align: center; padding: 50px; color: #888; }
+            .sub-section { margin-top: 20px; margin-bottom: 20px; }
+            .sub-title { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #555; }
             .footer { background: #f8f9fc; padding: 16px 30px; text-align: center; font-size: 12px; color: #888; }
             @media (max-width: 768px) { .content { padding: 16px; } th, td { padding: 8px 4px; font-size: 11px; } }
         </style>
@@ -324,20 +353,67 @@ def index():
                 try {
                     const response = await fetch(`/api/bill?date=${currentDate}&group_id=${GROUP_ID}`);
                     const data = await response.json();
-                    if (data.error || !data.income_bills) {
+                    if (data.error) {
                         document.getElementById('content').innerHTML = '<div class="loading">暂无账单数据</div>';
                         return;
                     }
                     let html = '';
+                    
+                    // 入款记录表格
                     if (data.income_bills && data.income_bills.length > 0) {
-                        html += `<div class="section"><div class="section-title">📥 入款记录 (${data.income_bills.length} 笔)</div><table><thead><tr><th>备注</th><th>时间</th><th>金额(元)</th><th>汇率</th><th>USDT</th><th>操作人</th></tr></thead><tbody>`;
+                        html += `<div class="section"><div class="section-title">📥 入款记录 (${data.income_bills.length} 笔)</div>
+                            <table><thead><tr><th>备注</th><th>时间</th><th>金额(元)</th><th>汇率</th><th>USDT</th><th>操作人</th></tr></thead><tbody>`;
                         for (const bill of data.income_bills) {
-                            html += `<tr><td>${bill.remark || '-'}</td><td>${bill.time}</td><td>${bill.amount}</td><td>${bill.exchange_rate}</td><td>${bill.usdt}</td><td>${bill.username}</td></tr>`;
+                            html += `<tr>
+                                <td>${bill.remark || '-'}</td>
+                                <td>${bill.time}</td>
+                                <td>${bill.amount}</td>
+                                <td>${bill.exchange_rate}</td>
+                                <td>${bill.usdt}</td>
+                                <td>${bill.username}</td>
+                            </tr>`;
                         }
                         html += `</tbody></table></div>`;
                     } else {
                         html += `<div class="section"><div class="section-title">📥 入款记录</div><div class="loading">暂无入款记录</div></div>`;
                     }
+                    
+                    // 下发记录表格
+                    if (data.expense_bills && data.expense_bills.length > 0) {
+                        html += `<div class="section"><div class="section-title">📤 下发记录 (${data.expense_bills.length} 笔)</div>
+                            <table><thead><tr><th>备注</th><th>时间</th><th>USDT</th><th>操作人</th></tr></thead><tbody>`;
+                        for (const bill of data.expense_bills) {
+                            html += `<tr>
+                                <td>${bill.remark || '-'}</td>
+                                <td>${bill.time}</td>
+                                <td>${bill.usdt}</td>
+                                <td>${bill.username}</td>
+                            </tr>`;
+                        }
+                        html += `</tbody></table></div>`;
+                    } else {
+                        html += `<div class="section"><div class="section-title">📤 下发记录</div><div class="loading">暂无下发记录</div></div>`;
+                    }
+                    
+                    // 备注分类统计
+                    if (data.remark_stats && data.remark_stats.length > 0) {
+                        html += `<div class="section"><div class="section-title">📊 备注分类统计</div>`;
+                        for (const stat of data.remark_stats) {
+                            html += `<div class="stat-item"><span class="stat-name">📝 ${stat.remark || '无备注'}</span><span class="stat-number">${stat.count}笔 | ${stat.amount}元 | ${stat.usdt}U</span></div>`;
+                        }
+                        html += `</div>`;
+                    }
+                    
+                    // 操作人分类统计
+                    if (data.operator_stats && data.operator_stats.length > 0) {
+                        html += `<div class="section"><div class="section-title">👤 操作人统计</div>`;
+                        for (const stat of data.operator_stats) {
+                            html += `<div class="stat-item"><span class="stat-name">👤 ${stat.username}</span><span class="stat-number">${stat.count}笔 | ${stat.amount}元 | ${stat.usdt}U</span></div>`;
+                        }
+                        html += `</div>`;
+                    }
+                    
+                    // 汇总统计
                     html += `<div class="stats-box"><div class="stats-grid">
                         <div class="stat-card"><div class="stat-label">💰 费率</div><div class="stat-value">${data.fee_rate}<span class="stat-unit">%</span></div></div>
                         <div class="stat-card"><div class="stat-label">💱 汇率</div><div class="stat-value">${data.exchange_rate}</div></div>
@@ -346,6 +422,7 @@ def index():
                         <div class="stat-card"><div class="stat-label">📤 已下发</div><div class="stat-value">${data.expense_usdt}<span class="stat-unit">U</span></div></div>
                         <div class="stat-card"><div class="stat-label">📊 未下发</div><div class="stat-value">${data.remaining_usdt}<span class="stat-unit">U</span></div></div>
                     </div></div>`;
+                    
                     document.getElementById('content').innerHTML = html;
                 } catch (err) {
                     document.getElementById('content').innerHTML = '<div class="loading">加载失败，请稍后重试</div>';
@@ -376,10 +453,12 @@ def api_bill():
     expense_usdt = total_expense[0] or 0
     
     income_bills = []
+    expense_bills = []
+    
     for bill in bills:
-        if bill[5] == 'income':
-            remark, username, amount, usdt, ex_rate, _, ts = bill
-            time_str = ts[11:16] if len(ts) > 11 else ts
+        remark, username, amount, usdt, ex_rate, bill_type, ts = bill
+        time_str = ts[11:16] if len(ts) > 11 else ts
+        if bill_type == 'income':
             income_bills.append({
                 'remark': remark or '-',
                 'username': username,
@@ -388,6 +467,40 @@ def api_bill():
                 'exchange_rate': f"{ex_rate:.2f}",
                 'time': time_str
             })
+        else:
+            expense_bills.append({
+                'remark': remark or '-',
+                'username': username,
+                'usdt': f"{usdt:.2f}",
+                'time': time_str
+            })
+    
+    # 按备注分类统计
+    remark_stats = []
+    conn = sqlite3.connect('bot_data.db')
+    c = conn.cursor()
+    c.execute("SELECT remark, COUNT(*), SUM(amount), SUM(usdt_amount) FROM bills WHERE group_id = ? AND bill_type = 'income' AND date(timestamp) = ? GROUP BY remark ORDER BY SUM(usdt_amount) DESC", 
+              (group_id, date_str))
+    for row in c.fetchall():
+        remark_stats.append({
+            'remark': row[0] or '无备注',
+            'count': row[1],
+            'amount': f"{row[2]:.0f}",
+            'usdt': f"{row[3]:.2f}"
+        })
+    
+    # 按操作人分类统计
+    operator_stats = []
+    c.execute("SELECT username, COUNT(*), SUM(amount), SUM(usdt_amount) FROM bills WHERE group_id = ? AND bill_type = 'income' AND date(timestamp) = ? GROUP BY username ORDER BY SUM(usdt_amount) DESC", 
+              (group_id, date_str))
+    for row in c.fetchall():
+        operator_stats.append({
+            'username': row[0],
+            'count': row[1],
+            'amount': f"{row[2]:.0f}",
+            'usdt': f"{row[3]:.2f}"
+        })
+    conn.close()
     
     return jsonify({
         'exchange_rate': f"{rate:.2f}",
@@ -396,7 +509,10 @@ def api_bill():
         'total_usdt': f"{total_usdt:.2f}",
         'expense_usdt': f"{expense_usdt:.2f}",
         'remaining_usdt': f"{total_usdt - expense_usdt:.2f}",
-        'income_bills': income_bills
+        'income_bills': income_bills,
+        'expense_bills': expense_bills,
+        'remark_stats': remark_stats,
+        'operator_stats': operator_stats
     })
 
 # ========== 机器人命令 ==========
