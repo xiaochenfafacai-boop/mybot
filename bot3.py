@@ -450,10 +450,14 @@ async def show_full_bill(update: Update, gid):
     income, expense, total_income, total_expense, today_date = get_today_bills(gid)
     rate = get_setting(gid, 'exchange_rate') or 7.2
     show_usdt = get_setting(gid, 'show_usdt') or 1
+    
     total_rmb = total_income[0] or 0
     total_usdt = total_income[1] or 0
     expense_usdt = total_expense[0] or 0
+    
     message = f"📊 今日账单汇总 {today_date}\n━━━━━━━━━━━━━━━━━━━━\n\n"
+    
+    # 显示入款记录
     if income:
         message += f"📥 入款({len(income)} 笔):\n"
         for bill in income[:5]:
@@ -469,14 +473,38 @@ async def show_full_bill(update: Update, gid):
                     message += f"  {username} {time_short}  {amount:.0f} / {ex_rate:.0f} = {usdt:.2f} U\n"
                 else:
                     message += f"  {username} {time_short}  {amount:.0f} 元\n"
+        if len(income) > 5:
+            message += f"  ... 还有 {len(income)-5} 笔\n"
         message += "\n"
+    else:
+        message += "📥 入款(0 笔):\n\n"
+    
+    # 显示下发记录
+    if expense:
+        message += f"📤 下发({len(expense)} 笔):\n"
+        for bill in expense[:5]:
+            remark, username, usdt, ex_rate, ts = bill
+            time_short = ts[11:16] if len(ts) > 11 else ts
+            if show_usdt:
+                message += f"  {username} {time_short}  {usdt:.2f} U\n"
+            else:
+                message += f"  {username} {time_short}  {usdt * ex_rate:.0f} 元\n"
+        if len(expense) > 5:
+            message += f"  ... 还有 {len(expense)-5} 笔\n"
+        message += "\n"
+    else:
+        message += "📤 下发(0 笔):\n\n"
+    
     message += f"💰 汇率：{rate:.2f}\n"
     if show_usdt:
-        message += f"📊 总入款：{total_rmb:.0f} | {total_usdt:.2f} U\n📊 已下发：{expense_usdt:.2f} U\n📊 未下发：{total_usdt - expense_usdt:.2f} U"
+        message += f"📊 总入款：{total_rmb:.0f} | {total_usdt:.2f} U\n"
+        message += f"📊 已下发：{expense_usdt:.2f} U\n"
+        message += f"📊 未下发：{total_usdt - expense_usdt:.2f} U"
     else:
-        message += f"📊 总入款：{total_rmb:.0f} 元\n📊 已下发：{expense_usdt * rate:.0f} 元\n📊 未下发：{(total_usdt - expense_usdt) * rate:.0f} 元"
+        message += f"📊 总入款：{total_rmb:.0f} 元\n"
+        message += f"📊 已下发：{expense_usdt * rate:.0f} 元\n"
+        message += f"📊 未下发：{(total_usdt - expense_usdt) * rate:.0f} 元"
     
-    # 使用 URL 按钮直接打开网页
     keyboard = [[
         InlineKeyboardButton("📊 查看完整账单", url=WEB_URL),
         InlineKeyboardButton("📖 帮助", callback_data='show_help')
