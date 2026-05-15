@@ -15,7 +15,7 @@ import os
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 # ========== 配置 ==========
-TOKEN = "8885640450:AAGNho8CU63JdS9JDSAvHSvsVErj_3scZiA"
+TOKEN = "8885640450:AAEUMqWV9sGZFfvT1cn3pceMOMk_1RDp-Dk"
 MASTER_USER_ID = 8782394486
 WEB_URL = "https://mybot-7tyh.onrender.com"
 PORT = int(os.environ.get('PORT', 8080))
@@ -308,8 +308,6 @@ def index():
             .stat-name { font-weight: 500; color: #333; }
             .stat-number { color: #667eea; font-weight: 600; }
             .loading { text-align: center; padding: 50px; color: #888; }
-            .sub-section { margin-top: 20px; margin-bottom: 20px; }
-            .sub-title { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #555; }
             .footer { background: #f8f9fc; padding: 16px 30px; text-align: center; font-size: 12px; color: #888; }
         </style>
     </head>
@@ -364,13 +362,13 @@ def index():
                                 <td>${bill.time}</td>
                                 <td>${bill.amount}</td>
                                 <td>${bill.exchange_rate}</td>
-                                <td>${bill.usdt}</td>
+                                <td>${bill.show_usdt ? bill.usdt : ''}${bill.show_usdt === false ? '' : bill.usdt_clean}</td>
                                 <td>${bill.username}</td>
                             </tr>`;
                         }
                         html += `</tbody></table></div>`;
                     } else {
-                        html += `<div class="section"><div class="section-title">📥 入款记录</div><div class="loading">暂无入款记录</div></div>`;
+                        html += `<div class="section"><div class="-section-title">📥 入款记录</div><div class="loading">暂无入款记录</div></div>`;
                     }
                     
                     if (data.expense_bills && data.expense_bills.length > 0) {
@@ -409,9 +407,9 @@ def index():
                         <div class="stat-card"><div class="stat-label">💰 费率</div><div class="stat-value">${data.fee_rate}<span class="stat-unit">%</span></div></div>
                         <div class="stat-card"><div class="stat-label">💱 汇率</div><div class="stat-value">${data.exchange_rate}</div></div>
                         <div class="stat-card"><div class="stat-label">📥 总入款(元)</div><div class="stat-value">${data.total_rmb}</div></div>
-                        <div class="stat-card"><div class="stat-label">💵 总入款(USDT)</div><div class="stat-value">${data.total_usdt}<span class="stat-unit">U</span></div></div>
+                        <div class="stat-card"><div class="stat-label">💵 总入款(USDT)</div><div class="stat-value">${data.total_usdt}${data.show_usdt ? 'U' : ''}</div></div>
                         <div class="stat-card"><div class="stat-label">📤 已下发</div><div class="stat-value">${data.expense_usdt}<span class="stat-unit">U</span></div></div>
-                        <div class="stat-card"><div class="stat-label">📊 未下发</div><div class="stat-value">${data.remaining_usdt}<span class="stat-unit">U</span></div></div>
+                        <div class="stat-card"><div class="stat-label">📊 未下发</div><div class="stat-value">${data.remaining_usdt}${data.show_usdt ? 'U' : ''}</div></div>
                     </div></div>`;
                     
                     document.getElementById('content').innerHTML = html;
@@ -438,6 +436,7 @@ def api_bill():
     
     rate = get_setting(group_id, 'exchange_rate') or 7.2
     fee_rate = get_setting(group_id, 'fee_rate') or 0
+    show_usdt = get_setting(group_id, 'show_usdt') or 1
     
     total_rmb = total_income[0] or 0
     total_usdt = total_income[1] or 0
@@ -498,6 +497,7 @@ def api_bill():
         'total_usdt': f"{total_usdt:.2f}",
         'expense_usdt': f"{expense_usdt:.2f}",
         'remaining_usdt': f"{total_usdt - expense_usdt:.2f}",
+        'show_usdt': show_usdt,
         'income_bills': income_bills,
         'expense_bills': expense_bills,
         'remark_stats': remark_stats,
@@ -532,6 +532,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 `/listops` - 查看操作人列表
 `/language` - 切换语言（中文/缅甸语）
 `/timezone` - 设置时区
+`/showusdt` - 显示USDT单位
+`/hideusdt` - 隐藏USDT单位
 
 📌 *删除命令：*
 `/deltoday` - 删除今日所有账单
@@ -689,7 +691,7 @@ async def hide_usdt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ 你没有操作权限")
         return
     update_setting(gid, 'show_usdt', 0)
-    await update.message.reply_text("🔕 已关闭USDT显示模式\n\n账单将只显示人民币金额")
+    await update.message.reply_text("🔕 已关闭USDT显示模式\n\n账单将只显示人民币金额，USDT单位将隐藏")
 
 async def del_today_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     gid = update.effective_chat.id
@@ -775,29 +777,22 @@ async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if show_usdt:
                     message += f"  {username}【{remark}】{time_short}  {amount:.0f} / {ex_rate:.0f} = {usdt:.2f} U\n"
                 else:
-                    message += f"  {username}【{remark}】{time_short}  {amount:.0f} 元\n"
+                    message += f"  {username}【{remark}】{time_short}  {amount:.0f} / {ex_rate:.0f} = {usdt:.2f}\n"
             else:
                 if show_usdt:
                     message += f"  {username} {time_short}  {amount:.0f} / {ex_rate:.0f} = {usdt:.2f} U\n"
                 else:
-                    message += f"  {username} {time_short}  {amount:.0f} 元\n"
+                    message += f"  {username} {time_short}  {amount:.0f} / {ex_rate:.0f} = {usdt:.2f}\n"
         message += "\n"
     message += f"💰 汇率：{rate:.2f}\n"
     if show_usdt:
         message += f"📊 总入款：{total_rmb:.0f} | {total_usdt:.2f} U\n📊 已下发：{expense_usdt:.2f} U\n📊 未下发：{total_usdt - expense_usdt:.2f} U"
     else:
-        message += f"📊 总入款：{total_rmb:.0f} 元\n📊 已下发：{expense_usdt * rate:.0f} 元\n📊 未下发：{(total_usdt - expense_usdt) * rate:.0f} 元"
+        message += f"📊 总入款：{total_rmb:.0f} | {total_usdt:.2f}\n📊 已下发：{expense_usdt:.2f} U\n📊 未下发：{total_usdt - expense_usdt:.2f}"
     await update.message.reply_text(message, parse_mode='Markdown')
 
-async def show_full_bill(update: Update, gid):
-    income, expense, total_income, total_expense, today_date = get_today_bills(gid)
-    rate = get_setting(gid, 'exchange_rate') or 7.2
-    show_usdt = get_setting(gid, 'show_usdt') or 1
-    
-    total_rmb = total_income[0] or 0
-    total_usdt = total_income[1] or 0
-    expense_usdt = total_expense[0] or 0
-    
+def show_bill_content(income, expense, total_rmb, total_usdt, expense_usdt, rate, show_usdt, today_date, gid):
+    """生成账单内容（支持显示/隐藏U）"""
     message = f"📊 今日账单汇总 {today_date}\n━━━━━━━━━━━━━━━━━━━━\n\n"
     
     if income:
@@ -809,12 +804,12 @@ async def show_full_bill(update: Update, gid):
                 if show_usdt:
                     message += f"  {username}【{remark}】{time_short}  {amount:.0f} / {ex_rate:.0f} = {usdt:.2f} U\n"
                 else:
-                    message += f"  {username}【{remark}】{time_short}  {amount:.0f} 元\n"
+                    message += f"  {username}【{remark}】{time_short}  {amount:.0f} / {ex_rate:.0f} = {usdt:.2f}\n"
             else:
                 if show_usdt:
                     message += f"  {username} {time_short}  {amount:.0f} / {ex_rate:.0f} = {usdt:.2f} U\n"
                 else:
-                    message += f"  {username} {time_short}  {amount:.0f} 元\n"
+                    message += f"  {username} {time_short}  {amount:.0f} / {ex_rate:.0f} = {usdt:.2f}\n"
         if len(income) > 5:
             message += f"  ... 还有 {len(income)-5} 笔\n"
         message += "\n"
@@ -826,10 +821,7 @@ async def show_full_bill(update: Update, gid):
         for bill in expense[:5]:
             remark, username, usdt, ex_rate, ts = bill
             time_short = ts[11:16] if len(ts) > 11 else ts
-            if show_usdt:
-                message += f"  {username} {time_short}  {usdt:.2f} U\n"
-            else:
-                message += f"  {username} {time_short}  {usdt * ex_rate:.0f} 元\n"
+            message += f"  {username} {time_short}  {usdt:.2f} U\n"
         if len(expense) > 5:
             message += f"  ... 还有 {len(expense)-5} 笔\n"
         message += "\n"
@@ -842,9 +834,22 @@ async def show_full_bill(update: Update, gid):
         message += f"📊 已下发：{expense_usdt:.2f} U\n"
         message += f"📊 未下发：{total_usdt - expense_usdt:.2f} U"
     else:
-        message += f"📊 总入款：{total_rmb:.0f} 元\n"
-        message += f"📊 已下发：{expense_usdt * rate:.0f} 元\n"
-        message += f"📊 未下发：{(total_usdt - expense_usdt) * rate:.0f} 元"
+        message += f"📊 总入款：{total_rmb:.0f} | {total_usdt:.2f}\n"
+        message += f"📊 已下发：{expense_usdt:.2f} U\n"
+        message += f"📊 未下发：{total_usdt - expense_usdt:.2f}"
+    
+    return message
+
+async def show_full_bill(update: Update, gid):
+    income, expense, total_income, total_expense, today_date = get_today_bills(gid)
+    rate = get_setting(gid, 'exchange_rate') or 7.2
+    show_usdt = get_setting(gid, 'show_usdt') or 1
+    
+    total_rmb = total_income[0] or 0
+    total_usdt = total_income[1] or 0
+    expense_usdt = total_expense[0] or 0
+    
+    message = show_bill_content(income, expense, total_rmb, total_usdt, expense_usdt, rate, show_usdt, today_date, gid)
     
     keyboard = [[
         InlineKeyboardButton("📊 查看完整账单", url=f"{WEB_URL}?group_id={gid}"),
@@ -861,53 +866,7 @@ async def show_today_summary(update: Update, gid):
     total_usdt = total_income[1] or 0
     expense_usdt = total_expense[0] or 0
     
-    message = f"📊 今日账单汇总\n📅 {today_date}\n━━━━━━━━━━━━━━━━━━━━\n\n"
-    
-    if income:
-        message += f"📥 入款({len(income)} 笔):\n"
-        for bill in income[:5]:
-            remark, username, amount, usdt, ex_rate, ts = bill
-            time_short = ts[11:16] if len(ts) > 11 else ts
-            if remark:
-                if show_usdt:
-                    message += f"  {username}【{remark}】{time_short}  +{amount:.0f}元 = {usdt:.2f}U\n"
-                else:
-                    message += f"  {username}【{remark}】{time_short}  +{amount:.0f}元\n"
-            else:
-                if show_usdt:
-                    message += f"  {username} {time_short}  +{amount:.0f}元 = {usdt:.2f}U\n"
-                else:
-                    message += f"  {username} {time_short}  +{amount:.0f}元\n"
-        if len(income) > 5:
-            message += f"  ... 还有 {len(income)-5} 笔\n"
-        message += "\n"
-    else:
-        message += "📥 入款(0 笔):\n\n"
-    
-    if expense:
-        message += f"📤 下发({len(expense)} 笔):\n"
-        for bill in expense[:5]:
-            remark, username, usdt, ex_rate, ts = bill
-            time_short = ts[11:16] if len(ts) > 11 else ts
-            if show_usdt:
-                message += f"  {username} {time_short}  下发 {usdt:.2f}U\n"
-            else:
-                message += f"  {username} {time_short}  下发 {usdt * ex_rate:.0f}元\n"
-        if len(expense) > 5:
-            message += f"  ... 还有 {len(expense)-5} 笔\n"
-        message += "\n"
-    else:
-        message += "📤 下发(0 笔):\n\n"
-    
-    message += f"💰 汇率：{rate:.2f}\n"
-    if show_usdt:
-        message += f"📊 总入款：{total_rmb:.0f} 元 = {total_usdt:.2f} U\n"
-        message += f"📊 已下发：{expense_usdt:.2f} U\n"
-        message += f"📊 未下发：{total_usdt - expense_usdt:.2f} U"
-    else:
-        message += f"📊 总入款：{total_rmb:.0f} 元\n"
-        message += f"📊 已下发：{expense_usdt * rate:.0f} 元\n"
-        message += f"📊 未下发：{(total_usdt - expense_usdt) * rate:.0f} 元"
+    message = show_bill_content(income, expense, total_rmb, total_usdt, expense_usdt, rate, show_usdt, today_date, gid)
     
     keyboard = [[
         InlineKeyboardButton("📊 查看完整账单", url=f"{WEB_URL}?group_id={gid}"),
@@ -932,7 +891,8 @@ async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message += "`အမည်+2000` - 带备注入款\n`下发50` - 下发50 USDT\n`+0` - 查看今日汇总\n\n"
     message += "📌 *管理命令:*\n`/mode` - 开关记账模式\n`/setrate` - 设置汇率\n`/setoperator` - 设置操作人\n"
     message += "`/bill` - 查看今日账单\n`/language` - 切换语言\n`/timezone` - 设置时区\n"
-    message += "`/deltoday` - 删除今日账单\n`/dellast` - 删除最后一笔\n`/delall` - 删除所有账单"
+    message += "`/deltoday` - 删除今日账单\n`/dellast` - 删除最后一笔\n`/delall` - 删除所有账单\n"
+    message += "`/showusdt` - 显示USDT单位\n`/hideusdt` - 隐藏USDT单位"
     
     keyboard = [[
         InlineKeyboardButton("📊 查看完整账单", url=f"{WEB_URL}?group_id={gid}"),
